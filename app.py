@@ -161,31 +161,30 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
     if gender != 'All':
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
 
-
     # Group by department and count entries
     department_counts = filtered_data.groupby('nom')['nombre'].sum().reset_index()
     department_counts.columns = ['Department', 'Count']
 
-    # Sort by count in descending order
-    department_counts = department_counts.sort_values('Count', ascending=False)
-    
-    # Calculate total number of names
-    total_names = department_counts['Count'].sum()
- 
+    # Calculate total counts for each department
+    total_counts = df_merged.groupby('nom')['nombre'].sum().reset_index()
+    total_counts.columns = ['Department', 'Total']
 
-    # Calculate percentage
-    department_counts['Percentage'] = (department_counts['Count'] / total_names) * 100
+    # Merge department_counts and total_counts
+    department_counts = pd.merge(department_counts, total_counts, on='Department')
+
+    # Calculate proportion
+    department_counts['Proportion'] = department_counts['Count'] / department_counts['Total']
     
-    # Select the top 5 departments
-    top_departments = department_counts.head(5)
-    top_departments = top_departments.sort_values('Percentage', ascending=True)
+    # Sort by proportion in descending order and select the top 5 departments
+    top_departments = department_counts.sort_values('Proportion', ascending=False).head(5)
 
     # Create bar chart
-    fig = px.bar(top_departments, x='Department', y='Percentage', title=f'Top 5 Departments for {name.capitalize()}',
-                 text='Percentage', labels={'Percentage': 'Percentage of Total Names'}, color='Department')
+    fig = px.bar(top_departments, x='Department', y='Proportion', title=f'Top 5 Departments for {name.capitalize()}',
+                 text='Proportion', labels={'Proportion': 'Proportion of Total Names'}, color='Department')
+    
+    fig.update_yaxes(tickformat=".2%")
 
     return fig
-
 
 # Run the app
 if __name__ == '__main__':
