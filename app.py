@@ -5,6 +5,9 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 import geopandas as gpd
+import dash_leaflet as dl
+import dash_leaflet.express as dlx
+import json
 
 # Get the current directory
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -28,11 +31,15 @@ data['dpt'] = data['dpt'].astype(str)
 
 # Replace 'preusuel' with the correct column name containing the person's name
 data['year'] = data['annais'].astype(int)
-# merge the data with the code_nom_df
+
+# Merge the data with the code_nom_df
 df_merged = pd.merge(data, code_nom_df, left_on='dpt', right_on='code', how='left')
 
 # Initialize the Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+# Create the GeoJSON object for the map
+geojson_data = json.loads(gdf.to_json())
 
 # Define the layout of the app
 app.layout = dbc.Container([
@@ -79,8 +86,12 @@ app.layout = dbc.Container([
     html.Div(id='search-output', className="text-center"),
     html.Hr(),
     dcc.Graph(id='yearly-graph'),
-    dcc.Graph(id='top-shops-graph'),  # Add a new graph for top shops
-    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)  # Add this line
+    dcc.Graph(id='top-shops-graph'),
+    dl.Map(id='map', style={'width': '100%', 'height': '50vh'}, center=[46.603354, 1.888334], zoom=6, children=[
+        dl.TileLayer(),
+        dl.GeoJSON(data=geojson_data, id='geojson', options=dict(clickable=True))
+    ]),
+    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
 ], fluid=True)
 
 # Define the callback to clear the search input
@@ -95,9 +106,9 @@ def clear_search_input(n_clicks):
 
 @app.callback(
     [Output('yearly-graph', 'figure'), Output('search-output', 'children')],
-    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]  # Add this input
+    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals'), Input('geojson', 'click_feature')]
 )
-def update_graph(name, year_range, gender, display_option, n_intervals):
+def update_graph(name, year_range, gender, display_option, n_intervals, click_feature):
     if name is None or name == '':
         return dash.no_update, dash.no_update
 
@@ -109,6 +120,10 @@ def update_graph(name, year_range, gender, display_option, n_intervals):
 
     if gender != 'All':
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
+
+    if click_feature:
+        dept_name = click_feature['properties']['nom']
+        filtered_data = filtered_data[filtered_data['nom'] == dept_name]
 
     # Group by year and count entries
     yearly_counts = filtered_data.groupby('year')['nombre'].sum().reset_index()
@@ -140,11 +155,12 @@ def update_graph(name, year_range, gender, display_option, n_intervals):
             return fig, dash.no_update
         else:
             return fig, html.Div("Results for '{}'.".format(name))
+
 @app.callback(
     Output('top-shops-graph', 'figure'), 
-    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]
+    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals'), Input('geojson', 'click_feature')]
 )
-def update_top_departments_graph(name, year_range, gender, display_option, n_intervals):
+def update_top_departments_graph(name, year_range, gender, display_option, n_intervals, click_feature):
     if not name:
         return dash.no_update
 
@@ -161,6 +177,9 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
     if gender != 'All':
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
 
+    if click_feature:
+        dept_name = click_feature['properties']['nom']
+        filtered_data = filtered_data[filtered_data['nom'] == dept_name]
 
     # Group by department and count entries
     department_counts = filtered_data.groupby('nom')['nombre'].sum().reset_index()
@@ -168,33 +187,31 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
 
     # Sort by count in descending order
     department_counts = department_counts.sort_values('Count', ascending=False)
-    
+
     # Calculate total number of names
     total_names = department_counts['Count'].sum()
- 
 
     # Calculate percentage
     department_counts['Percentage'] = (department_counts['Count'] / total_names) * 100
-    
+
     # Select the top 5 departments
     top_departments = department_counts.head(5)
     top_departments = top_departments.sort_values('Percentage', ascending=True)
 
     if display_option == 'count':
-    # Create bar chart
+        # Create bar chart
         fig = px.bar(top_departments, x='Count', y='Department', title=f'Top 5 Departments for {name.capitalize()}',
-                    text='Count', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
+                     text='Count', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
         fig.update_layout(barcornerradius=30)
     else:
-    # Create bar chart
+        # Create bar chart
         fig = px.bar(top_departments, y='Department', x='Percentage', title=f'Top 5 Departments for {name.capitalize()}',
-                    text='Percentage', labels={'Percentage': 'Percentage of Total Names'},  orientation='h')
+                     text='Percentage', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
         fig.update_layout(barcornerradius=30)
         fig.update_traces(texttemplate='%{text:.2s}%', textposition='outside')
 
     return fig
 
-
 # Run the app
 if __name__ == '__main__':
-    app.run_server(debug=True, port=8052)
+    app.run_server(debug=True, port=8053)
