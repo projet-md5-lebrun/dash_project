@@ -1,0 +1,43 @@
+/* styles.css */
+
+/* Header styles */
+h1 {
+    font-size: 36px;
+    font-weight: bold;
+    color: #333;
+}
+
+/* Search input styles */
+#search-input {
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+/* Clear button styles */
+#clear-button {
+    margin-top: 10px;
+}
+
+/* Additional filters styles */
+#gender-dropdown, #display-option {
+    width: 100%;
+}
+
+/* Output div styles */
+#search-output {
+    margin-top: 20px;
+}
+
+/* Divider styles */
+hr {
+    border: 0;
+    border-top: 1px solid #ccc;
+    margin: 30px 0;
+}
+
+/* Graph styles */
+.graph-container {
+    margin-top: 30px;
+}

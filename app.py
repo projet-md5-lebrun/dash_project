@@ -30,57 +30,100 @@ data['dpt'] = data['dpt'].astype(str)
 data['year'] = data['annais'].astype(int)
 # merge the data with the code_nom_df
 df_merged = pd.merge(data, code_nom_df, left_on='dpt', right_on='code', how='left')
+df_merged['nom'] = df_merged['nom'].astype(str)
 
 # Initialize the Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # Define the layout of the app
 app.layout = dbc.Container([
-    html.H1("Search in Merged Data", className="text-center"),
-    dbc.Row([
-        dbc.Col([
-            dcc.Input(id='search-input', type='text', placeholder='Enter person\'s name', value='camille'),
-            html.Button("Clear", id="clear-button", n_clicks=0)
-        ], width=6),
-        dbc.Col([
-            dcc.RangeSlider(
-                id='year-slider',
-                min=data['annais'].min(),
-                max=data['annais'].max(),
-                step=1,
-                value=[data['annais'].min(), data['annais'].max()],
-                marks={str(year): str(year) for year in range(int(data['annais'].min()), int(data['annais'].max())+1, 10)}
-            )
-        ], width=6),
-    ]),
-    dbc.Row([
-        dbc.Col([
+    dbc.Card(
+        dbc.CardBody([
+            html.H1("Find Funny Name", className="text-center mb-4"),
+            
+            dbc.Row([
+                dbc.Col([
+                    dcc.Input(
+                        id='search-input', 
+                        type='text', 
+                        placeholder="Enter person's name", 
+                        value='Camille', 
+                        className="form-control"
+                    ),
+                    html.Button("Clear", id="clear-button", n_clicks=0, className="btn btn-danger mt-2")
+                ], width=6),
+                
+                dbc.Col([
+                    dcc.RangeSlider(
+                        id='year-slider',
+                        min=data['annais'].min(),
+                        max=data['annais'].max(),
+                        step=1,
+                        value=[data['annais'].min(), data['annais'].max()],
+                        marks={str(year): str(year) for year in range(int(data['annais'].min()), int(data['annais'].max())+1, 10)},
+                        tooltip={"placement": "bottom", "always_visible": True}
+                    )
+                ], width=6)
+            ]),
+            
+            html.Br(),
+            
+            html.Label('Multi-Select Dropdown', className="form-label"),
             dcc.Dropdown(
-                id='gender-dropdown',
-                options=[
-                    {'label': 'Male', 'value': 1},
-                    {'label': 'Female', 'value': 2},
-                    {'label': 'All', 'value': 'All'}
-                ],
-                value='All'
-            )
-        ], width=3),
-        dbc.Col([
-            dcc.RadioItems(
-                id='display-option',
-                options=[
-                    {'label': 'Count', 'value': 'count'},
-                    {'label': 'Proportion', 'value': 'proportion'}
-                ],
-                value='count'
-            )
-        ], width=3),
-    ]),
-    html.Div(id='search-output', className="text-center"),
-    html.Hr(),
-    dcc.Graph(id='yearly-graph'),
-    dcc.Graph(id='top-shops-graph'),  # Add a new graph for top shops
-    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)  # Add this line
+                id='multi-select-dropdown',
+                options=[{'label': department, 'value': department} for department in df_merged['nom'].unique() if department],
+                multi=True,
+                className="mb-4"
+            ),
+            
+            dbc.Row([
+                dbc.Col([
+                    html.Label('Gender Dropdown', className="form-label"),
+                    dcc.Dropdown(
+                        id='gender-dropdown',
+                        options=[
+                            {'label': 'Male', 'value': 1},
+                            {'label': 'Female', 'value': 2},
+                            {'label': 'All', 'value': 'All'}
+                        ],
+                        value='All',
+                        className="mb-4"
+                    )
+                ], width=4),
+                
+                dbc.Col([
+                    html.Label('Department Dropdown', className="form-label"),
+                    dcc.Dropdown(
+                        id='department-dropdown',
+                        options=[{'label': department, 'value': department} for department in df_merged['nom'].unique() if department],
+                        value='All',
+                        className="mb-4"
+                    )
+                ], width=4),
+                
+                dbc.Col([
+                    html.Label('Display Option', className="form-label"),
+                    dcc.RadioItems(
+                        id='display-option',
+                        options=[
+                            {'label': 'Count', 'value': 'count'},
+                            {'label': 'Proportion', 'value': 'proportion'}
+                        ],
+                        value='count',
+                        className="form-check"
+                    )
+                ], width=4)
+            ]),
+            
+            html.Div(id='search-output', className="text-center mt-4"),
+            
+            html.Hr(),
+            
+            dcc.Graph(id='yearly-graph'),
+            dcc.Graph(id='top-shops-graph')
+        ])
+    ),
+    dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
 ], fluid=True)
 
 # Define the callback to clear the search input
