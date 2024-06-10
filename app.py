@@ -52,6 +52,18 @@ app.layout = dbc.Container([
                 value='All'
             )
         ], width=3),
+    dbc.Row([
+    dbc.Col([
+        dcc.RadioItems(
+            id='display-option',
+            options=[
+                {'label': 'Count', 'value': 'count'},
+                {'label': 'Proportion', 'value': 'proportion'}
+            ],
+            value='count'
+        )
+    ], width=3),
+]),
     ]),
     html.Div(id='search-output', className="text-center"),
     html.Hr(),
@@ -69,12 +81,11 @@ def clear_search_input(n_clicks):
         return ''
     return dash.no_update
 
-# Define the callback to update the graph and display a message when no results are found
 @app.callback(
     [Output('yearly-graph', 'figure'), Output('search-output', 'children')],
-    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('interval-component', 'n_intervals')]  # Add this input
+    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]  # Add this input
 )
-def update_graph(name, year_range, gender, n_intervals):
+def update_graph(name, year_range, gender, display_option, n_intervals):
     if name is None or name == '':
         return dash.no_update, dash.no_update
 
@@ -88,12 +99,27 @@ def update_graph(name, year_range, gender, n_intervals):
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
 
     # Group by year and count entries
-    yearly_counts = filtered_data['year'].value_counts().reset_index()
+    yearly_counts = filtered_data.groupby('year')['nombre'].sum().reset_index()
     yearly_counts.columns = ['year', 'count']
+
+    # Calculate total counts for each year
+    total_counts = data.groupby('year')['nombre'].sum().reset_index()
+    total_counts.columns = ['year', 'total']
+
+    # Merge yearly_counts and total_counts
+    yearly_counts = pd.merge(yearly_counts, total_counts, on='year')
+
+    # Calculate proportion
+    yearly_counts['proportion'] = yearly_counts['count'] / yearly_counts['total']
+
+    # Sort by year
     yearly_counts = yearly_counts.sort_values('year')
 
-    # Create bar chart
-    fig = px.line(yearly_counts, x='year', y='count', title=f'Number of Entries Per Year for {name.capitalize()}')
+    # Create line chart
+    if display_option == 'count':
+        fig = px.line(yearly_counts, x='year', y='count', title=f'Number of Entries Per Year for {name.capitalize()}')
+    else:
+        fig = px.line(yearly_counts, x='year', y='proportion', title=f'Proportion of Entries Per Year for {name.capitalize()}')
 
     if len(filtered_data) == 0:
         return dash.no_update, html.Div("No results found for '{}'. Please try again.".format(name))
@@ -105,4 +131,4 @@ def update_graph(name, year_range, gender, n_intervals):
 
 # Run the app
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, port=8052)
