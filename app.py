@@ -4,7 +4,9 @@ from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+import dash_leaflet as dl
 import geopandas as gpd
+import json
 
 # Get the current directory
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +16,7 @@ geojson_path = os.path.join(current_directory, 'data/departements.geojson')
 gdf = gpd.read_file(geojson_path)
 
 # Extract code and nom properties
-code_nom_df = gdf[['code', 'nom']]
+code_nom_df = gdf[['code', 'nom', 'geometry']]
 
 # Load and preprocess the data
 data = pd.read_csv(os.path.join(current_directory, 'data/merged_data.csv'), sep=';')
@@ -31,6 +33,7 @@ data['year'] = data['annais'].astype(int)
 # merge the data with the code_nom_df
 df_merged = pd.merge(data, code_nom_df, left_on='dpt', right_on='code', how='left')
 df_merged['nom'] = df_merged['nom'].astype(str)
+geojson_data = json.loads(gdf.to_json())
 
 # Initialize the Dash app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -120,7 +123,12 @@ app.layout = dbc.Container([
             html.Hr(),
             
             dcc.Graph(id='yearly-graph'),
-            dcc.Graph(id='top-shops-graph')
+            dcc.Graph(id='top-shops-graph'),
+            dcc.Graph(id='map-graph'), 
+            dl.Map(id='map', style={'width': '100%', 'height': '50vh'}, center=[46.603354, 1.888334], zoom=6, children=[
+                dl.TileLayer(),
+                dl.GeoJSON(data=geojson_data, id='geojson', options=dict(clickable=True))
+            ]),
         ])
     ),
     dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
@@ -183,19 +191,17 @@ def update_graph(name, year_range, gender, display_option, n_intervals):
             return fig, dash.no_update
         else:
             return fig, html.Div("Results for '{}'.".format(name))
+
 @app.callback(
     Output('top-shops-graph', 'figure'), 
     [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]
 )
 def update_top_departments_graph(name, year_range, gender, display_option, n_intervals):
-    if not name:
-        return dash.no_update
+    if name is None or name == '':
+        return dash.no_update, dash.no_update
 
-    # Filter the data for the given name
-    filtered_data = df_merged[df_merged['preusuel'].str.lower().str.contains(name.lower())]
-
-    if filtered_data.empty:
-        return dash.no_update
+    name = name.lower()
+    filtered_data = df_merged[df_merged['preusuel'].str.lower().str.contains(name)]
 
     # Apply other filters
     if year_range is not None:
@@ -203,7 +209,6 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
 
     if gender != 'All':
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
-
 
     # Group by department and count entries
     department_counts = filtered_data.groupby('nom')['nombre'].sum().reset_index()
@@ -214,7 +219,6 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
     
     # Calculate total number of names
     total_names = department_counts['Count'].sum()
- 
 
     # Calculate percentage
     department_counts['Percentage'] = (department_counts['Count'] / total_names) * 100
@@ -224,19 +228,87 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
     top_departments = top_departments.sort_values('Percentage', ascending=True)
 
     if display_option == 'count':
-    # Create bar chart
+        # Create bar chart
         fig = px.bar(top_departments, x='Count', y='Department', title=f'Top 5 Departments for {name.capitalize()}',
-                    text='Count', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
+                     text='Count', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
         fig.update_layout(barcornerradius=30)
     else:
-    # Create bar chart
+        # Create bar chart
         fig = px.bar(top_departments, y='Department', x='Percentage', title=f'Top 5 Departments for {name.capitalize()}',
-                    text='Percentage', labels={'Percentage': 'Percentage of Total Names'},  orientation='h')
+                     text='Percentage', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
         fig.update_layout(barcornerradius=30)
         fig.update_traces(texttemplate='%{text:.2s}%', textposition='outside')
 
     return fig
 
+@app.callback(
+    Output('map-graph', 'figure'),
+    [Input('search-input', 'value'),
+     Input('year-slider', 'value'),
+     Input('multi-select-dropdown', 'value'),
+     Input('gender-dropdown', 'value'),
+     Input('department-dropdown', 'value'),
+     Input('display-option', 'value')]
+)
+def update_map_figure(name, year_range, selected_departments, gender, department, display_option):
+    if name is None or name == '':
+        return dash.no_update
+
+    name = name.lower()
+    filtered_data = df_merged[df_merged['preusuel'].str.lower().str.contains(name)]
+
+    if year_range is not None:
+        filtered_data = filtered_data[(filtered_data['annais'] >= year_range[0]) & (filtered_data['annais'] <= year_range[1])]
+
+    if gender != 'All':
+        filtered_data = filtered_data[filtered_data['sexe'] == gender]
+
+    if selected_departments:
+        filtered_data = filtered_data[filtered_data['nom'].isin(selected_departments)]
+
+    if department and department != 'All':
+        filtered_data = filtered_data[filtered_data['nom'] == department]
+
+    if filtered_data.empty:
+        return dash.no_update
+
+    # Group by department and count entries
+    if display_option == 'count':
+        department_counts = filtered_data.groupby('nom')['nombre'].sum().reset_index()
+        department_counts.columns = ['department', 'count']
+    else:
+        department_counts = filtered_data.groupby('nom')['nombre'].sum().reset_index()
+        department_counts.columns = ['department', 'count']
+        total_count = department_counts['count'].sum()
+        department_counts['proportion'] = department_counts['count'] / total_count
+
+    # Create the map figure
+    if display_option == 'count':
+        fig = px.choropleth(
+            department_counts,
+            geojson=geojson_data,
+            locations='department',
+            featureidkey="properties.nom",
+            color='count',
+            hover_name='department',
+            color_continuous_scale="Viridis",
+            scope="europe"
+        )
+    else:
+        fig = px.choropleth(
+            department_counts,
+            geojson=geojson_data,
+            locations='department',
+            featureidkey="properties.nom",
+            color='proportion',
+            hover_name='department',
+            color_continuous_scale="red",
+            scope="europe"
+        )
+
+    fig.update_geos(fitbounds="locations", visible=False)
+
+    return fig
 
 # Run the app
 if __name__ == '__main__':
