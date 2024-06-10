@@ -27,6 +27,7 @@ data['annais'] = pd.to_numeric(data['annais'], errors='coerce')
 
 # Ensure type of 'dpt' is string
 data['dpt'] = data['dpt'].astype(str)
+code_nom_df['code'] = code_nom_df['code'].astype(str)
 
 # Replace 'preusuel' with the correct column name containing the person's name
 data['year'] = data['annais'].astype(int)
@@ -124,11 +125,8 @@ app.layout = dbc.Container([
             
             dcc.Graph(id='yearly-graph'),
             dcc.Graph(id='top-shops-graph'),
-            dcc.Graph(id='map-graph'), 
-            dl.Map(id='map', style={'width': '100%', 'height': '50vh'}, center=[46.603354, 1.888334], zoom=6, children=[
-                dl.TileLayer(),
-                dl.GeoJSON(data=geojson_data, id='geojson', options=dict(clickable=True))
-            ]),
+            dcc.Graph(id='map-graph')
+
         ])
     ),
     dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
@@ -284,29 +282,39 @@ def update_map_figure(name, year_range, selected_departments, gender, department
 
     # Create the map figure
     if display_option == 'count':
-        fig = px.choropleth(
+        fig = px.choropleth_mapbox(
             department_counts,
             geojson=geojson_data,
             locations='department',
             featureidkey="properties.nom",
             color='count',
             hover_name='department',
-            color_continuous_scale="Viridis",
-            scope="europe"
+            mapbox_style="carto-darkmatter",
+            opacity=0.5,
+            center = {"lat": 46.603354, "lon": 1.888334},
+            zoom=4
         )
+        fig.update_geos(fitbounds="locations", visible=False)
+        fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+        fig.update_layout(width=1100, height=500)
     else:
-        fig = px.choropleth(
+        fig = px.choropleth_mapbox(
             department_counts,
             geojson=geojson_data,
             locations='department',
             featureidkey="properties.nom",
             color='proportion',
             hover_name='department',
-            color_continuous_scale="red",
-            scope="europe"
+            mapbox_style="carto-darkmatter",
+            opacity=0.5,
+            center = {"lat": 46.603354, "lon": 1.888334},
+            zoom=4
+
         )
 
     fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
+    fig.update_layout(width=1100, height=500)
 
     return fig
 

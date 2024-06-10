@@ -37,7 +37,7 @@ def update_map_figure(search_name, year_range, selected_departments, gender, dep
         
         geojson_data = json.loads('data/departements.geojson')
         # Create the map figure
-        fig = px.choropleth(
+        fig = px.choropleth_mapbox(
             aggregated_data,
             geojson=geojson_data,  # Ensure you have your geojson data loaded
             locations='department',
