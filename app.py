@@ -93,8 +93,9 @@ def update_graph(name, year_range, gender, n_intervals):
     yearly_counts = yearly_counts.sort_values('year')
 
     # Create bar chart
-    fig = px.line(yearly_counts, x='year', y='count', title=f'Number of Entries Per Year for {name.capitalize()}')
-
+    fig = px.line(yearly_counts, x='year', y='count', title=f'Number of Entries Per Year for {name.capitalize()}', 
+                  text= "count")
+    fig.update_traces(textposition='bottom right')
     if len(filtered_data) == 0:
         return dash.no_update, html.Div("No results found for '{}'. Please try again.".format(name))
     else:
