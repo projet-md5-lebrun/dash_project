@@ -4,7 +4,6 @@ from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
-import dash_leaflet as dl
 import geopandas as gpd
 import json
 
@@ -25,8 +24,9 @@ data.fillna('', inplace=True)
 # Convert 'annais' to numeric
 data['annais'] = pd.to_numeric(data['annais'], errors='coerce')
 
-# Ensure type of 'dpt' is string
-data['dpt'] = data['dpt'].astype(str)
+# Ensure type of 'dpt' is string and add leading zeros if necessary
+data['dpt'] = data['dpt'].astype(str).str.zfill(2)
+code_nom_df['code'] = code_nom_df['code'].astype(str).str.zfill(2)
 
 # Replace 'preusuel' with the correct column name containing the person's name
 data['year'] = data['annais'].astype(int)
@@ -121,14 +121,22 @@ app.layout = dbc.Container([
             html.Div(id='search-output', className="text-center mt-4"),
             
             html.Hr(),
-            
-            dcc.Graph(id='yearly-graph'),
-            dcc.Graph(id='top-shops-graph'),
-            dcc.Graph(id='map-graph'), 
-            dl.Map(id='map', style={'width': '100%', 'height': '50vh'}, center=[46.603354, 1.888334], zoom=6, children=[
-                dl.TileLayer(),
-                dl.GeoJSON(data=geojson_data, id='geojson', options=dict(clickable=True))
+
+            # Position the map at the top
+            dbc.Row([
+                dbc.Col(
+                    dcc.Graph(id='map-graph'),
+                    width=8
+                ),
+                dbc.Col(
+                    dcc.Graph(id='top-shops-graph'),
+                    width=4
+                )
             ]),
+
+            html.Br(),
+
+            dcc.Graph(id='yearly-graph')
         ])
     ),
     dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
@@ -146,7 +154,7 @@ def clear_search_input(n_clicks):
 
 @app.callback(
     [Output('yearly-graph', 'figure'), Output('search-output', 'children')],
-    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]  # Add this input
+    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]
 )
 def update_graph(name, year_range, gender, display_option, n_intervals):
     if name is None or name == '':
@@ -307,6 +315,9 @@ def update_map_figure(name, year_range, selected_departments, gender, department
         )
 
     fig.update_geos(fitbounds="locations", visible=False)
+
+    # Set the zoom level to 4
+    fig.update_geos(projection_scale=4, center={"lat": 46.603354, "lon": 1.888334})
 
     return fig
 
