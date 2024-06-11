@@ -42,7 +42,7 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.layout = dbc.Container([
     dbc.Card(
         dbc.CardBody([
-            html.H1("Find Funny Name", className="text-center mb-4"),
+            html.H1("Nombre de naissances par prénoms", className="text-center mb-4"),
             
             dbc.Row([
                 dbc.Col([
@@ -71,10 +71,10 @@ app.layout = dbc.Container([
             
             html.Br(),
             
-            html.Label('Multi-Select Dropdown', className="form-label"),
+            html.Label('Select departement', className="form-label"),
             dcc.Dropdown(
                 id='multi-select-dropdown',
-                options=[{'label': department, 'value': department} for department in df_merged['nom'].unique() if department],
+                options=[{'label': department, 'value': department} for department in sorted(df_merged['nom'].unique())],
                 multi=True,
                 className="mb-4"
             ),
@@ -94,15 +94,6 @@ app.layout = dbc.Container([
                     )
                 ], width=4),
                 
-                dbc.Col([
-                    html.Label('Department Dropdown', className="form-label"),
-                    dcc.Dropdown(
-                        id='department-dropdown',
-                        options=[{'label': department, 'value': department} for department in df_merged['nom'].unique() if department],
-                        value='All',
-                        className="mb-4"
-                    )
-                ], width=4),
                 
                 dbc.Col([
                     html.Label('Display Option', className="form-label"),
@@ -154,9 +145,10 @@ def clear_search_input(n_clicks):
 
 @app.callback(
     [Output('yearly-graph', 'figure'), Output('search-output', 'children')],
-    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]
+    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals'), 
+    Input('multi-select-dropdown', 'value')]
 )
-def update_graph(name, year_range, gender, display_option, n_intervals):
+def update_graph(name, year_range, gender, display_option, n_intervals, department):
     if name is None or name == '':
         return dash.no_update, dash.no_update
 
@@ -168,6 +160,8 @@ def update_graph(name, year_range, gender, display_option, n_intervals):
 
     if gender != 'All':
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
+    if department is not None:
+        filtered_data = filtered_data[filtered_data['nom'].isin(department)]
 
     # Group by year and count entries
     yearly_counts = filtered_data.groupby('year')['nombre'].sum().reset_index()
@@ -238,7 +232,7 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
     if display_option == 'count':
         # Create bar chart
         fig = px.bar(top_departments, x='Count', y='Department', title=f'Top 5 Departments for {name.capitalize()}',
-                     text='Count', labels={'Percentage': 'Percentage of Total Names'}, orientation='h')
+                     text='Count', labels={'Number': 'Number of Total Names'}, orientation='h')
         fig.update_layout(barcornerradius=30)
     else:
         # Create bar chart
@@ -253,12 +247,10 @@ def update_top_departments_graph(name, year_range, gender, display_option, n_int
     Output('map-graph', 'figure'),
     [Input('search-input', 'value'),
      Input('year-slider', 'value'),
-     Input('multi-select-dropdown', 'value'),
      Input('gender-dropdown', 'value'),
-     Input('department-dropdown', 'value'),
      Input('display-option', 'value')]
 )
-def update_map_figure(name, year_range, selected_departments, gender, department, display_option):
+def update_map_figure(name, year_range, gender, display_option):
     if name is None or name == '':
         return dash.no_update
 
@@ -270,12 +262,6 @@ def update_map_figure(name, year_range, selected_departments, gender, department
 
     if gender != 'All':
         filtered_data = filtered_data[filtered_data['sexe'] == gender]
-
-    if selected_departments:
-        filtered_data = filtered_data[filtered_data['nom'].isin(selected_departments)]
-
-    if department and department != 'All':
-        filtered_data = filtered_data[filtered_data['nom'] == department]
 
     if filtered_data.empty:
         return dash.no_update
@@ -292,7 +278,7 @@ def update_map_figure(name, year_range, selected_departments, gender, department
 
     # Create the map figure
     if display_option == 'count':
-        fig = px.choropleth(
+        fig = px.choropleth_mapbox(
             department_counts,
             geojson=geojson_data,
             locations='department',
@@ -300,7 +286,11 @@ def update_map_figure(name, year_range, selected_departments, gender, department
             color='count',
             hover_name='department',
             color_continuous_scale="reds",
-            scope="europe"
+            mapbox_style="carto-positron",
+            title = f'Number of Entries Per Department for {name.capitalize()}',
+            center={"lat": 46.603354, "lon": 1.888334},
+            labels={'count': 'Number of Entries'},
+            zoom=3,
                             )
     else:
         fig = px.choropleth(
@@ -311,7 +301,12 @@ def update_map_figure(name, year_range, selected_departments, gender, department
             color='proportion',
             hover_name='department',
             color_continuous_scale="reds",
-            scope="europe"
+            projection="arto-positron",
+            title = f'Proportion of Entries Per Department for {name.capitalize()}',
+            center={"lat": 46.603354, "lon": 1.888334},
+            zoom=3,
+
+
         )
 
     fig.update_geos(fitbounds="locations", visible=False)
