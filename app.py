@@ -4,7 +4,6 @@ from dash import dcc, html, Input, Output, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
-import dash_leaflet as dl
 import geopandas as gpd
 import json
 
@@ -25,9 +24,9 @@ data.fillna('', inplace=True)
 # Convert 'annais' to numeric
 data['annais'] = pd.to_numeric(data['annais'], errors='coerce')
 
-# Ensure type of 'dpt' is string
-data['dpt'] = data['dpt'].astype(str)
-code_nom_df['code'] = code_nom_df['code'].astype(str)
+# Ensure type of 'dpt' is string and add leading zeros if necessary
+data['dpt'] = data['dpt'].astype(str).str.zfill(2)
+code_nom_df['code'] = code_nom_df['code'].astype(str).str.zfill(2)
 
 # Replace 'preusuel' with the correct column name containing the person's name
 data['year'] = data['annais'].astype(int)
@@ -122,11 +121,22 @@ app.layout = dbc.Container([
             html.Div(id='search-output', className="text-center mt-4"),
             
             html.Hr(),
-            
-            dcc.Graph(id='yearly-graph'),
-            dcc.Graph(id='top-shops-graph'),
-            dcc.Graph(id='map-graph')
 
+            # Position the map at the top
+            dbc.Row([
+                dbc.Col(
+                    dcc.Graph(id='map-graph'),
+                    width=8
+                ),
+                dbc.Col(
+                    dcc.Graph(id='top-shops-graph'),
+                    width=4
+                )
+            ]),
+
+            html.Br(),
+
+            dcc.Graph(id='yearly-graph')
         ])
     ),
     dcc.Interval(id='interval-component', interval=1000, n_intervals=0)
@@ -144,7 +154,7 @@ def clear_search_input(n_clicks):
 
 @app.callback(
     [Output('yearly-graph', 'figure'), Output('search-output', 'children')],
-    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]  # Add this input
+    [Input('search-input', 'value'), Input('year-slider', 'value'), Input('gender-dropdown', 'value'), Input('display-option', 'value'), Input('interval-component', 'n_intervals')]
 )
 def update_graph(name, year_range, gender, display_option, n_intervals):
     if name is None or name == '':
@@ -282,39 +292,32 @@ def update_map_figure(name, year_range, selected_departments, gender, department
 
     # Create the map figure
     if display_option == 'count':
-        fig = px.choropleth_mapbox(
+        fig = px.choropleth(
             department_counts,
             geojson=geojson_data,
             locations='department',
             featureidkey="properties.nom",
             color='count',
             hover_name='department',
-            mapbox_style="carto-darkmatter",
-            opacity=0.5,
-            center = {"lat": 46.603354, "lon": 1.888334},
-            zoom=4
-        )
-        fig.update_geos(fitbounds="locations", visible=False)
-        fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
-        fig.update_layout(width=1100, height=500)
+            color_continuous_scale="reds",
+            scope="europe"
+                            )
     else:
-        fig = px.choropleth_mapbox(
+        fig = px.choropleth(
             department_counts,
             geojson=geojson_data,
             locations='department',
             featureidkey="properties.nom",
             color='proportion',
             hover_name='department',
-            mapbox_style="carto-darkmatter",
-            opacity=0.5,
-            center = {"lat": 46.603354, "lon": 1.888334},
-            zoom=4
-
+            color_continuous_scale="reds",
+            scope="europe"
         )
 
     fig.update_geos(fitbounds="locations", visible=False)
-    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
-    fig.update_layout(width=1100, height=500)
+
+    # Set the zoom level to 4
+    fig.update_geos(projection_scale=4, center={"lat": 46.603354, "lon": 1.888334})
 
     return fig
 
